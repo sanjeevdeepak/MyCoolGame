@@ -1,0 +1,55 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!78 &1
+TagManager:
+  serializedVersion: 3
+  tags:
+  - PhysicsObject
+  layers:
+  - Default
+  - TransparentFX
+  - Ignore Raycast
+  - Player
+  - Water
+  - UI
+  - Not Climbable
+  - PhysicsObject
+  - PlayerPassthrough
+  - PhyObjPassthrough
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  - 
+  m_SortingLayers:
+  - name: Background
+    uniqueID: 3019524749
+    locked: 0
+  - name: Default
+    uniqueID: 0
+    locked: 0
+  - name: TextBubbles
+    uniqueID: 4107490239
+    locked: 0
+  - name: Foreground
+    uniqueID: 2684113739
+    locked: 0
+  m_RenderingLayers:
+  - Default
