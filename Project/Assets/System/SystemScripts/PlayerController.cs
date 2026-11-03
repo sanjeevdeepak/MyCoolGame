@@ -17,6 +17,11 @@ public class PlayerController : MonoBehaviour
     public PlayerMovementValues airMovementValues;
     [Tooltip("The player's movement physics when sliding on a wall.")]
     public PlayerMovementValues wallMovementValues;
+    [Tooltip("Use direct acceleration and braking rather than friction. Enabled only for LastTrain.")]
+    public bool responsiveMovement;
+    [Min(0f)] public float groundBraking = 180f;
+    [Min(0f)] public float airBraking = 12f;
+    [Min(0f)] public float turnAcceleration = 180f;
     [Tooltip("Whether or not the player can 'swim', i.e. jump while in water.")]
     public bool canSwim = true;
     [Tooltip("What level of slope is no longer considered \"ground\", on a scale of 0-1, with 1 being flat ground, 0 being a vertical wall, and 0.5 being a 45° slope.")]
@@ -34,6 +39,11 @@ public class PlayerController : MonoBehaviour
     public float jumpQueueTime = 0.1f;
     [Tooltip("The maximum upwards speed a player can achieve.")]
     public float maxJumpSpeed = 100f;
+    [Min(0f)] public float jumpSpeed = 16f;
+    [Range(.1f,1f)] public float jumpCut = .65f;
+    [Tooltip("Hold down while descending to commit to a quicker landing.")]
+    public bool allowFastFall;
+    [Min(0f)] public float fastFallGravity = 14f;
 
     [Space]
     [Header("Double Jumping")]
@@ -68,6 +78,8 @@ public class PlayerController : MonoBehaviour
     public AudioClip bumpSound;
     [Tooltip("The sound that plays when the player dies.")]
     public AudioClip deathSound;
+    // A scene can handle respawn without changing other scenes' default behavior.
+    public System.Action respawnHandler;
 
     // System Variables
     [Space]
@@ -93,6 +105,7 @@ public class PlayerController : MonoBehaviour
     // Jump
     private PlayerJumpValues currentJumpValues;
     private bool isJumping = false;
+    private bool jumpHeld;
     private bool jumpQueued = false;
     private float lastJumpQueueTime = 0;
     private float lastJumpTime = -1;
@@ -168,7 +181,11 @@ public class PlayerController : MonoBehaviour
         PerformWallEffects(moveDirection);
         DetermineMovementState();
 
-        if (controlEnabled && (isCrouching && !isInWater))
+        if (responsiveMovement)
+        {
+            MoveResponsive();
+        }
+        else if (controlEnabled && (isCrouching && !isInWater))
         {
             SetFriction(currentMovementState.crouchFriction);
         }
@@ -190,6 +207,7 @@ public class PlayerController : MonoBehaviour
 
         if (controlEnabled && jumpQueued)
         {
+            if (Time.time - lastJumpQueueTime >= jumpQueueTime) jumpQueued = false;
             if (CanJump() && (Time.time - lastJumpQueueTime) < jumpQueueTime)
             {
                 jumpQueued = false;
@@ -208,6 +226,24 @@ public class PlayerController : MonoBehaviour
         SetAnimatorStates();
 
         if (transform.position.y < deathHeight) Respawn();
+    }
+
+    private void MoveResponsive()
+    {
+        // TrainRiderFrame has already removed the carrier velocity for this tick.
+        // Horizontal control never damps gravity or a jump's vertical velocity.
+        rigidbody2D.linearDamping = 0f;
+        if (rigidbody2D.sharedMaterial != null) rigidbody2D.sharedMaterial.friction = 0f;
+        float direction = controlEnabled && !isCrouching ? moveDirection.x : 0f;
+        float speed = rigidbody2D.linearVelocity.x;
+        float acceleration = currentMovementState.moveAcceleration;
+        if (Mathf.Abs(direction) < .01f) acceleration = IsOnGround() ? groundBraking : airBraking;
+        else
+        {
+            if (IsOnGround() && speed * direction < 0f) acceleration = turnAcceleration;
+            isFacingLeft = direction < 0f;
+        }
+        rigidbody2D.linearVelocityX = Mathf.MoveTowards(speed, direction * currentMovementState.maxSpeed, acceleration * Time.fixedDeltaTime);
     }
 
     private void SetFriction(float aFriction)
@@ -264,7 +300,7 @@ public class PlayerController : MonoBehaviour
         foreach (ContactPoint2D eachContact in contacts)
         {
             // Debug.Log(eachContact.normal);
-            if(eachContact.normal.y > groundSlopeThreshold)
+            if(eachContact.normal.y > groundSlopeThreshold && (!responsiveMovement || rigidbody2D.linearVelocity.y <= .2f))
             {
                 isOnGround = true;
             }
@@ -354,6 +390,13 @@ public class PlayerController : MonoBehaviour
 
     private void DetermineGravityScale()
     {
+        if (responsiveMovement && allowFastFall && controlEnabled && !IsOnGround() &&
+            moveDirection.y < -.5f && rigidbody2D.linearVelocity.y <= 0f)
+        {
+            rigidbody2D.gravityScale = Mathf.Max(fastFallGravity,airMovementValues.fallGravity);
+            isJumping = false;
+            return;
+        }
         if (isCrouching)
         {
             rigidbody2D.gravityScale = currentMovementState.crouchGravity;
@@ -401,6 +444,7 @@ public class PlayerController : MonoBehaviour
 
     private bool CanJump()
     {
+        if (responsiveMovement && Time.time - lastJumpTime < jumpStartedThreshold) return false;
         return IsOnGroundWithCoyoteTime()
             || (IsOnWall() && allowWallJump)
             || (jumpsSinceGroundTouch <= GetAvailableJumps() && !isInWater);
@@ -437,8 +481,13 @@ public class PlayerController : MonoBehaviour
     private void PerformJump()
     {
         rigidbody2D.gravityScale = currentJumpValues.jumpGravity;
-        rigidbody2D.linearVelocityY = Mathf.Max(0, rigidbody2D.linearVelocityY);
-        rigidbody2D.AddForce(new Vector3(0, currentJumpValues.jumpForce, 0));
+        if (responsiveMovement)
+            rigidbody2D.linearVelocityY = jumpSpeed * (jumpHeld ? 1f : jumpCut);
+        else
+        {
+            rigidbody2D.linearVelocityY = Mathf.Max(0, rigidbody2D.linearVelocityY);
+            rigidbody2D.AddForce(new Vector3(0, currentJumpValues.jumpForce, 0));
+        }
         if (currentJumpValues is PlayerWallJumpValues)
         {
             PlayerWallJumpValues wallJumpValues = currentJumpValues as PlayerWallJumpValues;
@@ -452,7 +501,7 @@ public class PlayerController : MonoBehaviour
             }
         }
         if (IsOnGroundWithCoyoteTime()) jumpedOffGround = true;
-        isJumping = true;
+        isJumping = !responsiveMovement || jumpHeld;
         lastJumpTime = Time.time;
         jumpsSinceGroundTouch++;
         SetAnimatorTrigger("jump");
@@ -474,12 +523,16 @@ public class PlayerController : MonoBehaviour
     {
         if (controlEnabled)
         {
+            jumpHeld = true;
             QueueJump();
         }
     }
 
     public void JumpButtonReleased()
     {
+        jumpHeld = false;
+        if (responsiveMovement && isJumping && rigidbody2D.linearVelocityY > 0f)
+            rigidbody2D.linearVelocityY *= jumpCut;
         isJumping = false;
         rigidbody2D.gravityScale = currentMovementState.fallGravity;
         lastJumpDuration = Time.time - lastJumpTime;
@@ -514,6 +567,7 @@ public class PlayerController : MonoBehaviour
 
     public void Respawn()
     {
+        if(respawnHandler!=null){respawnHandler();return;}
         if (systemVariables.deathParticlePrefab != null)
         {
             GameObject.Instantiate(systemVariables.deathParticlePrefab, transform.position, Quaternion.identity);
@@ -548,6 +602,28 @@ public class PlayerController : MonoBehaviour
     public void SetSpawnPoint(Transform aPoint)
     {
         currentSpawnPoint = aPoint;
+    }
+
+    public void ResetForRespawn(Vector2 position)
+    {
+        StopAllCoroutines();
+        RigidbodyInterpolation2D interpolation=rigidbody2D.interpolation;
+        rigidbody2D.interpolation=RigidbodyInterpolation2D.None;
+        rigidbody2D.bodyType=RigidbodyType2D.Dynamic;
+        rigidbody2D.position=position;
+        transform.position=new Vector3(position.x,position.y,transform.position.z);
+        rigidbody2D.linearVelocity=Vector2.zero;rigidbody2D.angularVelocity=0;
+        rigidbody2D.interpolation=interpolation;
+        controlEnabled=true;isJumping=jumpQueued=isCrouching=jumpedOffGround=jumpHeld=false;
+        moveDirection=Vector2.zero;
+        isOnGround=onGroundLastFrame=true;onWallLeft=onWallRight=wasOnWallLeft=wasOnWallRight=false;
+        jumpsSinceGroundTouch=0;lastJumpTime=lastJumpQueueTime=-1;
+        lastOnGroundTime=lastLandTime=Time.time;
+        currentMovementState=groundMovementValues;currentJumpValues=jumpValues;
+        collider2D.size=originalColliderSize;collider2D.offset=originalColliderOffset;
+        rigidbody2D.gravityScale=groundMovementValues.fallGravity;
+        if(systemVariables.spritesParent!=null)systemVariables.spritesParent.SetActive(true);
+        ResetAnimatorTrigger("jump");SetAnimatorStates();
     }
 
 
@@ -651,6 +727,8 @@ public class PlayerController : MonoBehaviour
             isCrouching = false;
             isJumping = false;
             jumpQueued = false;
+            jumpHeld = false;
+            moveDirection = Vector2.zero;
         }
     }
 

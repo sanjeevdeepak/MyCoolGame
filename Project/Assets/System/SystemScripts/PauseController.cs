@@ -91,7 +91,9 @@ public class PauseController : MonoBehaviour
             if (holdingRestart && Time.realtimeSinceStartup - holdRestartStartTime > retstartHoldTime)
             {
                 UnPause();
-                GetPlayerController().Respawn();
+                TrainLevelDirector level=FindAnyObjectByType<TrainLevelDirector>();
+                if(level!=null && level.IsFinished)level.RestartLevel();
+                else GetPlayerController().Respawn();
             }
         }
     }
@@ -100,7 +102,7 @@ public class PauseController : MonoBehaviour
     {
         if(playerController == null)
         {
-            playerController = FindObjectOfType<PlayerController>();
+            playerController = FindAnyObjectByType<PlayerController>();
         }
         return playerController;
     }

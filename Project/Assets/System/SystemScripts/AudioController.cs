@@ -22,6 +22,11 @@ public class AudioController : MonoBehaviour
         return instance.mixer;
     }
 
+    private void Start()
+    {
+        if (mixer != null) mixer.SetFloat("pauseVolume", 0f);
+    }
+
     public void SetAudioMixerSnapshot(AudioMixerSnapshot aSnapshot)
     {
         aSnapshot.TransitionTo(snapshotTransitionTime);

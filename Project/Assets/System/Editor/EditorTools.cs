@@ -9,7 +9,7 @@ public class EditorTools : MonoBehaviour
         if (Application.isPlaying)
         {
             Transform player = PlayerController.instance.transform;
-            Transform camera = FindObjectOfType<CameraFollow>().transform;
+            Transform camera = FindAnyObjectByType<CameraFollow>().transform;
             player.position = new Vector3(
                 SceneView.lastActiveSceneView.camera.transform.position.x,
                 SceneView.lastActiveSceneView.camera.transform.position.y,

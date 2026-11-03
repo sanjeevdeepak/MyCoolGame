@@ -9,8 +9,8 @@ EditorBuildSettings:
     path: Assets/Scenes/UiScenes/TitleScreen.unity
     guid: ce3f852853f994bf5836effaab3dfe0b
   - enabled: 1
-    path: Assets/Scenes/UiScenes/WinScreen.unity
-    guid: ca24066a358f64121aa08929e28f3586
+    path: Assets/Scenes/LastTrain.unity
+    guid: c6e13895832efcb4c8facea86a2999e8
   m_configObjects:
     com.unity.input.settings: {fileID: 11400000, guid: 82921a2a75cbb4c4a82ed12cbad44436, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
